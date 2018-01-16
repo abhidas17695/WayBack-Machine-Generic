@@ -242,6 +242,8 @@ function checkIt(wayback_url) {
 */
 var VERSION = "2.10";
 Globalstatuscode="";
+//badURL="";
+//badId=-1;
 var excluded_urls = [
   "localhost",
   "0.0.0.0",
@@ -262,7 +264,7 @@ function isValidUrl(url) {
 function rewriteUserAgentHeader(e) {
   for (var header of e.requestHeaders) {
     if (header.name.toLowerCase() === "user-agent") {
-      header.value = header.value  + " Wayback_Machine_Chrome/" + VERSION + " Status-code/" + Globalstatuscode;
+      header.value = header.value  + " Wayback_Machine_Chrome/Firefox/" + VERSION + " Status-code/" + Globalstatuscode;
         console.log(header);
     }
   }
@@ -281,64 +283,111 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
  * Header callback
  */
 RTurl="";
+//chrome.webRequest.onCompleted.addListener(function(details) {
+//  function tabIsReady(isIncognito) {
+//    var httpFailCodes = [404, 408, 410, 451, 500, 502, 503, 504,
+//      509, 520, 521, 523, 524, 525, 526];
+//      
+//      if (isIncognito === false &&
+//        details.frameId === 0 &&
+//        httpFailCodes.indexOf(details.statusCode) >= 0 &&
+//        isValidUrl(details.url)) {
+//              Globalstatuscode=details.statusCode;
+//              wmAvailabilityCheck(details.url, function(wayback_url, url) {
+//              if(details.statusCode==504){
+//                  //notify(wayback_url,'View an archived version courtesy of the Internet Archive WayBack Machine');
+//                  chrome.notifications.create(
+//                'wayback-notification',{   
+//                type: 'basic', 
+//                requireInteraction:true,
+//                iconUrl: '/images/logo.gif', 
+//                title: "Page not available ?", 
+//                message:"View an archived version courtesy of the WayBack Machine",
+//                buttons:[{
+//                    title: "Click here to see archived version"
+//                }]
+//                },
+//                function(id){
+//                    myNotID=id;
+//                } 
+//              );
+//              chrome.notifications.onButtonClicked.addListener(function(notifId, btnIdx) {
+//    if (notifId === myNotID) {
+//        if (btnIdx === 0) {
+//                chrome.tabs.create({ url:wayback_url});
+//                chrome.notifications.clear(myNotID);
+//                myNotID=null;
+//        }
+//    }
+//});
+//              }else{
+//                  chrome.tabs.executeScript(details.tabId, {
+//              file: "scripts/client.js"
+//            }, function() {
+//              chrome.tabs.sendMessage(details.tabId, {
+//                type: "SHOW_BANNER",
+//                wayback_url: wayback_url
+//              });
+//            });
+//              }
+//          }, function() {
+//            
+//          });
+//        }
+//      }
+//      if(details.tabId >0 ){
+//        chrome.tabs.get(details.tabId, function(tab) {
+//          tabIsReady(tab.incognito);
+//        });
+//      }
+//    }, {urls: ["<all_urls>"], types: ["main_frame"]});
+
 chrome.webRequest.onCompleted.addListener(function(details) {
-  function tabIsReady(isIncognito) {
-    var httpFailCodes = [404, 408, 410, 451, 500, 502, 503, 504,
-      509, 520, 521, 523, 524, 525, 526];
-      
-      if (isIncognito === false &&
-        details.frameId === 0 &&
-        httpFailCodes.indexOf(details.statusCode) >= 0 &&
-        isValidUrl(details.url)) {
-              Globalstatuscode=details.statusCode;
-              wmAvailabilityCheck(details.url, function(wayback_url, url) {
-              if(details.statusCode==504){
-                  //notify(wayback_url,'View an archived version courtesy of the Internet Archive WayBack Machine');
-                  chrome.notifications.create(
-                'wayback-notification',{   
-                type: 'basic', 
-                requireInteraction:true,
-                iconUrl: '/images/logo.gif', 
-                title: "Page not available ?", 
-                message:"View an archived version courtesy of the WayBack Machine",
-                buttons:[{
-                    title: "Click here to see archived version"
-                }]
-                },
-                function(id){
-                    myNotID=id;
-                } 
-              );
-              chrome.notifications.onButtonClicked.addListener(function(notifId, btnIdx) {
-    if (notifId === myNotID) {
-        if (btnIdx === 0) {
-                chrome.tabs.create({ url:wayback_url});
-                chrome.notifications.clear(myNotID);
-                myNotID=null;
+    var httpFailCodes = [404, 408, 410, 451, 500, 502, 503, 504, 509, 520, 521, 523, 524, 525, 526];
+
+    function tabIsReady(badURL, badId, isIncognito) {
+        if (isIncognito === !1 && details.frameId === 0 && isValidUrl(badURL)) {
+            wmAvailabilityCheck(badURL, function(wayback_url, url) {
+                chrome.tabs.executeScript(badId, {
+                    file: "scripts/client.js"
+                }, function() {
+                    chrome.tabs.sendMessage(badId, {
+                        type: "SHOW_BANNER",
+                        wayback_url: wayback_url
+                    })
+                })
+            }, function() {})
         }
     }
-});
-              }else{
-                  chrome.tabs.executeScript(details.tabId, {
-              file: "scripts/client.js"
-            }, function() {
-              chrome.tabs.sendMessage(details.tabId, {
-                type: "SHOW_BANNER",
-                wayback_url: wayback_url
-              });
-            });
-              }
-          }, function() {
-            
-          });
+    if (httpFailCodes.indexOf(details.statusCode) >= 0) {
+        var sUsrAg = navigator.userAgent;
+        if (sUsrAg.indexOf("Chrome") > -1) {
+            if (details.tabId > 0) {
+                chrome.tabs.get(details.tabId, function(tab) {
+                    tabIsReady(details.url, details.tabId, tab.incognito)
+                })
+            }
+        } else {
+            var badURL = details.url;
+            chrome.tabs.query({
+                currentWindow: !0
+            }, function(tabs) {
+                for (var i = 0; i < tabs.length; i++) {
+                    if (tabs[i].url == badURL) {
+                        var badId = tabs[i].id
+                    }
+                }
+                chrome.tabs.get(badId, function(tab) {
+                    tabIsReady(badURL, badId, tab.incognito)
+                })
+            })
         }
-      }
-      if(details.tabId >0 ){
-        chrome.tabs.get(details.tabId, function(tab) {
-          tabIsReady(tab.incognito);
-        });
-      }
-    }, {urls: ["<all_urls>"], types: ["main_frame"]});
+    }
+}, {
+    urls: ["<all_urls>"],
+    types: ["main_frame"]
+});
+
 /**
  * Checks Wayback Machine API for url snapshot
  */
